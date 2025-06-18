@@ -144,7 +144,12 @@ You have your own viewpoints and can engage in meaningful dialogue while being h
         return False
 
 # Initialize voice processor
-voice_processor = VoiceProcessor()
+try:
+    voice_processor = VoiceProcessor()
+    logger.info("VoiceProcessor initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize VoiceProcessor: {str(e)}")
+    voice_processor = None
 
 @app.route('/')
 def index():
@@ -176,68 +181,117 @@ def chat():
         response.headers.add('Access-Control-Allow-Methods', 'POST')
         return response
     
+    # Check if voice processor is initialized
+    if voice_processor is None:
+        logger.error("VoiceProcessor not initialized")
+        return jsonify({
+            'error': 'Service not available - check server logs for API key configuration',
+            'status': 'error'
+        }), 500
+    
     temp_file_path = None
     
     try:
+        logger.info("Received chat request")
+        
         # Get JSON data from request
         data = request.get_json()
         
-        if not data or 'audio' not in data:
+        if not data:
+            logger.error("No JSON data received")
+            return jsonify({'error': 'No JSON data provided'}), 400
+            
+        if 'audio' not in data:
+            logger.error("No audio field in JSON data")
             return jsonify({'error': 'No audio data provided'}), 400
         
         audio_base64 = data.get('audio')
-        logger.info("Received audio data for processing")
+        logger.info(f"Received audio data length: {len(audio_base64) if audio_base64 else 0}")
+        
+        if not audio_base64:
+            return jsonify({'error': 'Empty audio data'}), 400
         
         # Decode base64 audio data
         try:
             audio_data = base64.b64decode(audio_base64)
+            logger.info(f"Decoded audio data length: {len(audio_data)}")
         except Exception as e:
             logger.error(f"Base64 decode error: {str(e)}")
             return jsonify({'error': 'Invalid audio data format'}), 400
         
         # Create temporary file for audio processing with delete=False
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-            temp_file_path = temp_file.name
-            
-            # Write audio data to temporary file
-            temp_file.write(audio_data)
-            temp_file.flush()
-            
-            # Important: Close the file handle explicitly
-            temp_file.close()
-            
-            # Process the audio
-            logger.info("Starting audio processing...")
-            
-            # Step 1: Transcribe audio to text
-            user_text = voice_processor.transcribe_audio(temp_file_path)
-            
-            if not user_text or len(user_text.strip()) < 2:
-                return jsonify({'error': 'Could not understand audio. Please try again.'}), 400
-            
-            # Step 2: Generate AI response
-            assistant_text = voice_processor.generate_response(user_text)
-            
-            # Step 3: Convert response to speech
-            audio_response = voice_processor.text_to_speech(assistant_text)
-            
-            # Encode audio response to base64
-            audio_response_base64 = base64.b64encode(audio_response).decode('utf-8')
-            
-            # Return successful response
-            response_data = {
-                'userText': user_text,
-                'assistantText': assistant_text,
-                'audioResponse': audio_response_base64,
-                'timestamp': data.get('timestamp', ''),
-                'status': 'success'
-            }
-            
-            logger.info("Audio processing completed successfully")
-            return jsonify(response_data)
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                temp_file_path = temp_file.name
+                
+                # Write audio data to temporary file
+                temp_file.write(audio_data)
+                temp_file.flush()
+                
+                # Important: Close the file handle explicitly
+                temp_file.close()
+                
+                logger.info(f"Created temporary file: {temp_file_path}")
+                
+                # Process the audio
+                logger.info("Starting audio processing...")
+                
+                # Step 1: Transcribe audio to text
+                try:
+                    user_text = voice_processor.transcribe_audio(temp_file_path)
+                    logger.info(f"Transcription successful: {user_text}")
+                except Exception as e:
+                    logger.error(f"Transcription failed: {str(e)}")
+                    return jsonify({'error': f'Transcription failed: {str(e)}'}), 500
+                
+                if not user_text or len(user_text.strip()) < 2:
+                    logger.warning("Transcription too short or empty")
+                    return jsonify({'error': 'Could not understand audio. Please try again.'}), 400
+                
+                # Step 2: Generate AI response
+                try:
+                    assistant_text = voice_processor.generate_response(user_text)
+                    logger.info(f"Response generation successful")
+                except Exception as e:
+                    logger.error(f"Response generation failed: {str(e)}")
+                    return jsonify({'error': f'Response generation failed: {str(e)}'}), 500
+                
+                # Step 3: Convert response to speech
+                try:
+                    audio_response = voice_processor.text_to_speech(assistant_text)
+                    logger.info("Text-to-speech conversion successful")
+                except Exception as e:
+                    logger.error(f"Text-to-speech failed: {str(e)}")
+                    return jsonify({'error': f'Text-to-speech failed: {str(e)}'}), 500
+                
+                # Encode audio response to base64
+                try:
+                    audio_response_base64 = base64.b64encode(audio_response).decode('utf-8')
+                    logger.info("Audio encoding successful")
+                except Exception as e:
+                    logger.error(f"Audio encoding failed: {str(e)}")
+                    return jsonify({'error': f'Audio encoding failed: {str(e)}'}), 500
+                
+                # Return successful response
+                response_data = {
+                    'userText': user_text,
+                    'assistantText': assistant_text,
+                    'audioResponse': audio_response_base64,
+                    'timestamp': data.get('timestamp', ''),
+                    'status': 'success'
+                }
+                
+                logger.info("Audio processing completed successfully")
+                return jsonify(response_data)
+        
+        except Exception as e:
+            logger.error(f"File processing error: {str(e)}")
+            return jsonify({'error': f'File processing failed: {str(e)}'}), 500
                 
     except Exception as e:
         logger.error(f"Chat processing error: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return jsonify({
             'error': f'Processing failed: {str(e)}',
             'status': 'error'
@@ -246,7 +300,10 @@ def chat():
     finally:
         # Clean up temporary file in the finally block
         if temp_file_path:
-            voice_processor.safe_delete_file(temp_file_path)
+            try:
+                voice_processor.safe_delete_file(temp_file_path)
+            except Exception as e:
+                logger.error(f"Failed to clean up temp file: {str(e)}")
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
