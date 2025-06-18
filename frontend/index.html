@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sophia - Voice Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .title {
+            font-size: 3rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(45deg, #64b5f6, #81c784);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #b0b0b0;
+            margin-bottom: 3rem;
+            font-weight: 300;
+        }
+
+        .voice-button-container {
+            position: relative;
+            margin: 3rem 0;
+        }
+
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #3a3a4f 0%, #4a4a5f 100%);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+
+        .voice-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .voice-button.listening {
+            background: linear-gradient(135deg, #64b5f6 0%, #42a5f5 100%);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .voice-button.processing {
+            background: linear-gradient(135deg, #81c784 0%, #66bb6a 100%);
+            animation: spin 1s linear infinite;
+        }
+
+        .voice-button.speaking {
+            background: linear-gradient(135deg, #ffb74d 0%, #ffa726 100%);
+            animation: glow 1.5s ease-in-out infinite alternate;
+        }
+
+        .mic-icon {
+            width: 40px;
+            height: 40px;
+            fill: #ffffff;
+            transition: all 0.3s ease;
+        }
+
+        .status-text {
+            margin-top: 2rem;
+            font-size: 1.2rem;
+            font-weight: 400;
+            min-height: 1.5rem;
+            opacity: 0.8;
+        }
+
+        .conversation-display {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.8rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .user-message {
+            background: rgba(100, 181, 246, 0.2);
+            margin-left: 2rem;
+        }
+
+        .assistant-message {
+            background: rgba(129, 199, 132, 0.2);
+            margin-right: 2rem;
+        }
+
+        .wave-animation {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 2px solid rgba(100, 181, 246, 0.3);
+            opacity: 0;
+            animation: wave 2s ease-out infinite;
+        }
+
+        .wave-animation.active {
+            opacity: 1;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 8px 32px rgba(255, 183, 77, 0.4); }
+            to { box-shadow: 0 8px 32px rgba(255, 183, 77, 0.8); }
+        }
+
+        @keyframes wave {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.7;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1.2);
+                opacity: 0;
+            }
+        }
+
+        .error-message {
+            color: #ff6b6b;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .title {
+                font-size: 2.2rem;
+            }
+            .container {
+                padding: 1rem;
+            }
+            .voice-button {
+                width: 100px;
+                height: 100px;
+            }
+            .mic-icon {
+                width: 32px;
+                height: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Sophia</h1>
+        <p class="subtitle">Your AI Voice Assistant</p>
+        
+        <div class="voice-button-container">
+            <div class="wave-animation"></div>
+            <button class="voice-button" id="voiceButton">
+                <svg class="mic-icon" viewBox="0 0 24 24">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="status-text" id="statusText">Click to start conversation</div>
+        
+        <div class="conversation-display" id="conversationDisplay" style="display: none;">
+            <!-- Conversation messages will appear here -->
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <script>
+        class VoiceChatbot {
+            constructor() {
+                this.voiceButton = document.getElementById('voiceButton');
+                this.statusText = document.getElementById('statusText');
+                this.conversationDisplay = document.getElementById('conversationDisplay');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.waveAnimation = document.querySelector('.wave-animation');
+                
+                this.isListening = false;
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                
+                // Get the current domain for API calls
+                this.apiBaseUrl = window.location.origin;
+                
+                this.init();
+            }
+            
+            init() {
+                this.voiceButton.addEventListener('click', () => this.handleVoiceButtonClick());
+                this.checkMicrophonePermission();
+            }
+            
+            async checkMicrophonePermission() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(track => track.stop());
+                } catch (error) {
+                    this.showError('Microphone access denied. Please allow microphone permission.');
+                }
+            }
+            
+            async handleVoiceButtonClick() {
+                if (this.isListening) {
+                    this.stopListening();
+                } else {
+                    await this.startListening();
+                }
+            }
+            
+            async startListening() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        this.audioChunks.push(event.data);
+                    };
+                    
+                    this.mediaRecorder.onstop = () => {
+                        this.processAudio();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    
+                    this.mediaRecorder.start();
+                    this.setListeningState();
+                    
+                } catch (error) {
+                    this.showError('Error accessing microphone: ' + error.message);
+                }
+            }
+            
+            stopListening() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
+                this.setProcessingState();
+            }
+            
+            async processAudio() {
+                const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                
+                try {
+                    // Convert audio to base64 for sending to backend
+                    const audioBase64 = await this.blobToBase64(audioBlob);
+                    
+                    // Send to backend - using relative URL so it works on any domain
+                    const response = await fetch(`${this.apiBaseUrl}/api/chat`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            audio: audioBase64,
+                            timestamp: new Date().toISOString()
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Backend response error');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Display conversation
+                    this.addMessage(data.userText, 'user');
+                    this.addMessage(data.assistantText, 'assistant');
+                    
+                    // Play response audio
+                    if (data.audioResponse) {
+                        this.setSpeakingState();
+                        await this.playAudio(data.audioResponse);
+                    }
+                    
+                } catch (error) {
+                    this.showError('Error processing audio: ' + error.message);
+                    console.error('Processing error:', error);
+                }
+                
+                this.setIdleState();
+            }
+            
+            async blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+            
+            async playAudio(audioBase64) {
+                return new Promise((resolve, reject) => {
+                    const audio = new Audio('data:audio/mp3;base64,' + audioBase64);
+                    audio.onended = resolve;
+                    audio.onerror = reject;
+                    audio.play();
+                });
+            }
+            
+            addMessage(text, type) {
+                if (!text) return;
+                
+                this.conversationDisplay.style.display = 'block';
+                
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}-message`;
+                messageDiv.textContent = text;
+                
+                this.conversationDisplay.appendChild(messageDiv);
+                this.conversationDisplay.scrollTop = this.conversationDisplay.scrollHeight;
+            }
+            
+            setListeningState() {
+                this.isListening = true;
+                this.voiceButton.className = 'voice-button listening';
+                this.statusText.textContent = 'Listening...';
+                this.waveAnimation.className = 'wave-animation active';
+                this.clearError();
+            }
+            
+            setProcessingState() {
+                this.isListening = false;
+                this.voiceButton.className = 'voice-button processing';
+                this.statusText.textContent = 'Processing...';
+                this.waveAnimation.className = 'wave-animation';
+            }
+            
+            setSpeakingState() {
+                this.voiceButton.className = 'voice-button speaking';
+                this.statusText.textContent = 'Speaking...';
+            }
+            
+            setIdleState() {
+                this.isListening = false;
+                this.voiceButton.className = 'voice-button';
+                this.statusText.textContent = 'Click to start conversation';
+                this.waveAnimation.className = 'wave-animation';
+            }
+            
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.setIdleState();
+            }
+            
+            clearError() {
+                this.errorMessage.textContent = '';
+            }
+        }
+        
+        // Initialize the chatbot when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new VoiceChatbot();
+        });
+    </script>
+</body>
+</html>
