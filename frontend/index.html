@@ -236,9 +236,6 @@
                 this.mediaRecorder = null;
                 this.audioChunks = [];
                 
-                // Get the current domain for API calls
-                this.apiBaseUrl = window.location.origin;
-                
                 this.init();
             }
             
@@ -302,8 +299,12 @@
                     // Convert audio to base64 for sending to backend
                     const audioBase64 = await this.blobToBase64(audioBlob);
                     
-                    // Send to backend - using relative URL so it works on any domain
-                    const response = await fetch(`${this.apiBaseUrl}/api/chat`, {
+                    // Send to backend - determine URL based on environment
+                    const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                        ? 'http://localhost:5000/api/chat'
+                        : '/api/chat';
+                    
+                    const response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
